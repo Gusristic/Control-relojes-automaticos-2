@@ -1,0 +1,6 @@
+{
+  "name": "Horology Sheets - Control de Desviación de Relojes",
+  "description": "Hoja de cálculo y análisis de precisión para relojes automáticos con sincronización en la nube Supabase: comparación con hora real, desviación en segundos, evolución puntual y acumulada, gráficas temporales y desglose por posición.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

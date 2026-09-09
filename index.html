@@ -1,0 +1,2442 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Horology Sheets - Control de Desviación de Relojes</title>
+  <meta name="description" content="Hoja de cálculo y análisis de precisión para relojes automáticos: comparación con hora real, desviación en segundos, evolución puntual y acumulada, gráficas temporales y desglose por posición y cargador." />
+  <meta property="og:title" content="Horology Sheets - Control de Desviación de Relojes" />
+  <meta property="og:description" content="Hoja de cálculo y análisis de precisión para relojes automáticos: comparación con hora real, desviación en segundos, evolución puntual y acumulada, gráficas temporales y desglose por posición y cargador." />
+
+  <!-- 1. Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+            mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace']
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- 2. React & ReactDOM CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- 3. Babel Standalone CDN -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- 4. Lucide Icons CDN -->
+  <script>window.react = window.React;</script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://unpkg.com/lucide-react@0.475.0/dist/umd/lucide-react.js"></script>
+
+  <!-- 5. Supabase JS Client CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    /* Custom scrollbars and transitions */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="bg-slate-100/70 text-slate-800 antialiased min-h-screen">
+  <div id="root"></div>
+
+  <!-- Application Code -->
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useRef } = React;
+
+    // Safe Lucide Icons resolver with fallback
+    const LR = window.LucideReact || {};
+    const getIcon = (name, fallbackSvg) => {
+      if (LR[name]) return LR[name];
+      return (props) => (
+        <svg
+          width={props.size || 16}
+          height={props.size || 16}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={props.className || "w-4 h-4"}
+        >
+          {fallbackSvg}
+        </svg>
+      );
+    };
+
+    const Watch = getIcon('Watch', <circle cx="12" cy="12" r="7" />);
+    const Clock = getIcon('Clock', <circle cx="12" cy="12" r="10" />);
+    const Play = getIcon('Play', <polygon points="5 3 19 12 5 21 5 3" />);
+    const Pause = getIcon('Pause', <><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></>);
+    const RotateCcw = getIcon('RotateCcw', <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />);
+    const Plus = getIcon('Plus', <path d="M5 12h14M12 5v14" />);
+    const Trash2 = getIcon('Trash2', <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />);
+    const Edit2 = getIcon('Edit2', <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />);
+    const Download = getIcon('Download', <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />);
+    const Upload = getIcon('Upload', <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />);
+    const Compass = getIcon('Compass', <circle cx="12" cy="12" r="10" />);
+    const Table = getIcon('Table', <rect width="18" height="18" x="3" y="3" rx="2" />);
+    const LineChart = getIcon('LineChart', <path d="m3 3v18h18M18 17V9M13 17V5M8 17v-3" />);
+    const Sparkles = getIcon('Sparkles', <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z" />);
+    const Check = getIcon('Check', <polyline points="20 6 9 17 4 12" />);
+    const X = getIcon('X', <path d="M18 6 6 18M6 6l12 12" />);
+    const AlertTriangle = getIcon('AlertTriangle', <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />);
+    const FileSpreadsheet = getIcon('FileSpreadsheet', <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />);
+    const Info = getIcon('Info', <circle cx="12" cy="12" r="10" />);
+    const ArrowUpRight = getIcon('ArrowUpRight', <path d="M7 7h10v10M7 17 17 7" />);
+    const ArrowDownRight = getIcon('ArrowDownRight', <path d="M7 7 17 17M17 7v10H7" />);
+    const Minus = getIcon('Minus', <path d="M5 12h14" />);
+    const Cloud = getIcon('Cloud', <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />);
+    const CloudOff = getIcon('CloudOff', <path d="m2 2 20 20M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.956-.445M19.23 14.73A4.5 4.5 0 0 0 17.5 10h-1.79A7 7 0 0 0 8.05 6.05" />);
+    const RefreshCw = getIcon('RefreshCw', <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16M3 21v-5h5" />);
+    const CheckCircle2 = getIcon('CheckCircle2', <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM9 12l2 2 4-4" />);
+    const Database = getIcon('Database', <ellipse cx="12" cy="5" rx="9" ry="3" />);
+
+    // Positions metadata
+    const POSITION_NAMES = {
+      CH: 'Esfera Arriba (Dial Up)',
+      CD: 'Esfera Abajo (Dial Down)',
+      '9H': 'Corona a las 9 (Crown Left)',
+      '3H': 'Corona a las 3 (Crown Right)',
+      '12H': 'Corona a las 12 (Crown Up)',
+      '6H': 'Corona a las 6 (Crown Down)',
+      WINDER: 'En Cargador Rotativo (Winder)',
+    };
+
+    const POSITION_DESCRIPTIONS = {
+      CH: 'Posición horizontal apoyado sobre el fondo de la caja.',
+      CD: 'Posición horizontal apoyado sobre el cristal/bisel.',
+      '9H': 'Posición vertical típica al llevar el reloj en la muñeca izquierda con el brazo hacia abajo.',
+      '3H': 'Posición vertical con la corona orientada hacia abajo.',
+      '12H': 'Posición vertical con las 12 hacia arriba.',
+      '6H': 'Posición vertical con las 6 hacia arriba.',
+      WINDER: 'En movimiento rotativo en cargador automático programado.',
+    };
+
+    // Color options
+    const COLOR_OPTIONS = ['#0f172a', '#1e3a8a', '#14532d', '#701a75', '#7c2d12', '#047857', '#b91c1c'];
+
+    // Initial clean data
+    const INITIAL_WATCHES = [
+      {
+        id: 'watch-primary',
+        name: 'Mi Reloj Automático',
+        brand: 'Reloj Mecánico',
+        model: 'Calibre Automático',
+        caliber: '28,800 bph / 4 Hz',
+        targetRateMin: -5,
+        targetRateMax: 10,
+        powerReserveHours: 42,
+        color: '#0f172a',
+        notes: 'Reloj principal de mi colección para seguimiento de precisión.'
+      }
+    ];
+
+    const DEMO_SAMPLE_WATCHES = [
+      {
+        id: 'watch-demo-seiko',
+        name: 'Prospex Diver 200m',
+        brand: 'Seiko',
+        model: 'SPB143',
+        caliber: '6R35 (21,600 bph)',
+        targetRateMin: -15,
+        targetRateMax: 25,
+        powerReserveHours: 70,
+        color: '#1e3a8a',
+        notes: 'Típico adelanto en muñeca y retraso al reposar con corona arriba.'
+      }
+    ];
+
+    const generateDemoMeasurements = () => {
+      const now = Date.now();
+      const h = 3600 * 1000;
+      return [
+        {
+          id: 'm-demo-1',
+          watchId: 'watch-demo-seiko',
+          realTime: new Date(now - 72 * h).toISOString(),
+          watchTime: new Date(now - 72 * h).toISOString(),
+          position: 'CH',
+          isReset: true,
+          notes: 'Puesta en hora exacta de referencia sincronizada con el segundero.'
+        },
+        {
+          id: 'm-demo-2',
+          watchId: 'watch-demo-seiko',
+          realTime: new Date(now - 48 * h).toISOString(),
+          watchTime: new Date(now - 48 * h + 4000).toISOString(),
+          position: 'CH',
+          isReset: false,
+          notes: 'Noche en la mesita con esfera hacia arriba (+4.0s en 24h).'
+        },
+        {
+          id: 'm-demo-3',
+          watchId: 'watch-demo-seiko',
+          realTime: new Date(now - 24 * h).toISOString(),
+          watchTime: new Date(now - 24 * h + 9500).toISOString(),
+          position: '9H',
+          isReset: false,
+          notes: 'Uso diario normal en muñeca izquierda (+5.5s en 24h).'
+        },
+        {
+          id: 'm-demo-4',
+          watchId: 'watch-demo-seiko',
+          realTime: new Date(now).toISOString(),
+          watchTime: new Date(now + 8000).toISOString(),
+          position: '6H',
+          isReset: false,
+          notes: 'Compensación nocturna en posición vertical (-1.5s en 24h).'
+        }
+      ];
+    };
+
+    // Storage Keys
+    const STORAGE_KEY_WATCHES = 'horology_sheets_watches_v3';
+    const STORAGE_KEY_MEASUREMENTS = 'horology_sheets_measurements_v3';
+
+    // Supabase Cloud Configuration
+    const SUPABASE_CONFIG = {
+      url: 'https://rqbkvhhpxqtzqaypotir.supabase.co',
+      key: 'sb_publishable_pHyGpf8LH9Tx3rG4o7Djrg_6IUucCzv'
+    };
+
+    const supabaseApi = {
+      getHeaders() {
+        return {
+          'apikey': SUPABASE_CONFIG.key,
+          'Authorization': `Bearer ${SUPABASE_CONFIG.key}`,
+          'Content-Type': 'application/json'
+        };
+      },
+
+      async fetchWatches() {
+        const res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/watches?select=*&order=name.asc`, {
+          headers: {
+            'apikey': SUPABASE_CONFIG.key,
+            'Authorization': `Bearer ${SUPABASE_CONFIG.key}`
+          }
+        });
+        if (!res.ok) throw new Error(`Error en Supabase (${res.status}): ${res.statusText}`);
+        const rows = await res.json();
+        return rows.map(r => ({
+          id: r.id,
+          name: r.name,
+          brand: r.brand || '',
+          model: r.model || '',
+          caliber: r.caliber || '',
+          targetRateMin: Number(r.target_rate_min ?? -5),
+          targetRateMax: Number(r.target_rate_max ?? 10),
+          powerReserveHours: Number(r.power_reserve_hours ?? 42),
+          color: r.color || '#0f172a',
+          notes: r.notes || ''
+        }));
+      },
+
+      async upsertWatch(w) {
+        const payload = {
+          id: w.id,
+          name: w.name,
+          brand: w.brand || '',
+          model: w.model || '',
+          caliber: w.caliber || '',
+          target_rate_min: w.targetRateMin,
+          target_rate_max: w.targetRateMax,
+          power_reserve_hours: w.powerReserveHours,
+          color: w.color || '#0f172a',
+          notes: w.notes || '',
+          updated_at: new Date().toISOString()
+        };
+        const res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/watches`, {
+          method: 'POST',
+          headers: {
+            ...this.getHeaders(),
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(`Error al guardar reloj en Supabase (${res.status})`);
+      },
+
+      async upsertWatchesBatch(watchesList) {
+        if (!watchesList || watchesList.length === 0) return;
+        const payload = watchesList.map(w => ({
+          id: w.id,
+          name: w.name,
+          brand: w.brand || '',
+          model: w.model || '',
+          caliber: w.caliber || '',
+          target_rate_min: w.targetRateMin,
+          target_rate_max: w.targetRateMax,
+          power_reserve_hours: w.powerReserveHours,
+          color: w.color || '#0f172a',
+          notes: w.notes || '',
+          updated_at: new Date().toISOString()
+        }));
+        const res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/watches`, {
+          method: 'POST',
+          headers: {
+            ...this.getHeaders(),
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(`Error al sincronizar relojes en lote (${res.status})`);
+      },
+
+      async deleteWatch(watchId) {
+        const res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/watches?id=eq.${encodeURIComponent(watchId)}`, {
+          method: 'DELETE',
+          headers: {
+            'apikey': SUPABASE_CONFIG.key,
+            'Authorization': `Bearer ${SUPABASE_CONFIG.key}`
+          }
+        });
+        if (!res.ok) throw new Error(`Error al borrar reloj en Supabase (${res.status})`);
+      },
+
+      async fetchMeasurements() {
+        const res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/measurements?select=*&order=real_time.asc`, {
+          headers: {
+            'apikey': SUPABASE_CONFIG.key,
+            'Authorization': `Bearer ${SUPABASE_CONFIG.key}`
+          }
+        });
+        if (!res.ok) throw new Error(`Error en Supabase (${res.status}): ${res.statusText}`);
+        const rows = await res.json();
+        return rows.map(r => ({
+          id: r.id,
+          watchId: r.watch_id,
+          realTime: r.real_time,
+          watchTime: r.watch_time,
+          position: r.position,
+          isReset: !!r.is_reset,
+          notes: r.notes || ''
+        }));
+      },
+
+      async upsertMeasurement(m) {
+        const payload = {
+          id: m.id,
+          watch_id: m.watchId,
+          real_time: m.realTime,
+          watch_time: m.watchTime,
+          position: m.position,
+          is_reset: !!m.isReset,
+          notes: m.notes || ''
+        };
+        const res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/measurements`, {
+          method: 'POST',
+          headers: {
+            ...this.getHeaders(),
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(`Error al guardar medición en Supabase (${res.status})`);
+      },
+
+      async upsertMeasurementsBatch(measurementsList) {
+        if (!measurementsList || measurementsList.length === 0) return;
+        const payload = measurementsList.map(m => ({
+          id: m.id,
+          watch_id: m.watchId,
+          real_time: m.realTime,
+          watch_time: m.watchTime,
+          position: m.position,
+          is_reset: !!m.isReset,
+          notes: m.notes || ''
+        }));
+        const res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/measurements`, {
+          method: 'POST',
+          headers: {
+            ...this.getHeaders(),
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(`Error al sincronizar mediciones en lote (${res.status})`);
+      },
+
+      async deleteMeasurement(measurementId) {
+        const res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/measurements?id=eq.${encodeURIComponent(measurementId)}`, {
+          method: 'DELETE',
+          headers: {
+            'apikey': SUPABASE_CONFIG.key,
+            'Authorization': `Bearer ${SUPABASE_CONFIG.key}`
+          }
+        });
+        if (!res.ok) throw new Error(`Error al borrar medición en Supabase (${res.status})`);
+      },
+
+      async clearAll() {
+        await fetch(`${SUPABASE_CONFIG.url}/rest/v1/measurements?id=not.is.null`, {
+          method: 'DELETE',
+          headers: {
+            'apikey': SUPABASE_CONFIG.key,
+            'Authorization': `Bearer ${SUPABASE_CONFIG.key}`
+          }
+        });
+        await fetch(`${SUPABASE_CONFIG.url}/rest/v1/watches?id=not.is.null`, {
+          method: 'DELETE',
+          headers: {
+            'apikey': SUPABASE_CONFIG.key,
+            'Authorization': `Bearer ${SUPABASE_CONFIG.key}`
+          }
+        });
+      }
+    };
+
+    // Format helpers
+    const formatSeconds = (sec) => {
+      if (sec === undefined || sec === null || isNaN(sec)) return '--';
+      const sign = sec > 0 ? '+' : '';
+      return `${sign}${sec.toFixed(1)}s`;
+    };
+
+    const formatSpd = (spd) => {
+      if (spd === undefined || spd === null || isNaN(spd)) return '--';
+      const sign = spd > 0 ? '+' : '';
+      return `${sign}${spd.toFixed(1)} s/d`;
+    };
+
+    const formatDateShort = (isoString) => {
+      try {
+        const d = new Date(isoString);
+        return d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ' +
+               d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      } catch (e) {
+        return isoString;
+      }
+    };
+
+    // Core Calculation Logic
+    function calculateMeasurements(rawList) {
+      const sorted = [...rawList].sort(
+        (a, b) => new Date(a.realTime).getTime() - new Date(b.realTime).getTime()
+      );
+
+      let currentSessionIndex = 1;
+      let sessionStartRealTime = null;
+      let sessionStartOffset = 0;
+
+      return sorted.map((m, index) => {
+        const realMs = new Date(m.realTime).getTime();
+        const watchMs = new Date(m.watchTime).getTime();
+        const currentOffsetSeconds = (watchMs - realMs) / 1000;
+
+        if (index === 0 || m.isReset) {
+          if (index > 0 && m.isReset) {
+            currentSessionIndex += 1;
+          }
+          sessionStartRealTime = realMs;
+          sessionStartOffset = currentOffsetSeconds;
+
+          return {
+            ...m,
+            sessionIndex: currentSessionIndex,
+            currentOffsetSeconds,
+            elapsedHoursFromPrev: 0,
+            driftFromPrevSeconds: 0,
+            dailyRateFromPrev_spd: undefined,
+            sessionCumulativeDrift: 0,
+            sessionAverageRate_spd: undefined,
+          };
+        }
+
+        const prev = sorted[index - 1];
+        const prevRealMs = new Date(prev.realTime).getTime();
+        const prevWatchMs = new Date(prev.watchTime).getTime();
+        const prevOffsetSeconds = (prevWatchMs - prevRealMs) / 1000;
+
+        const deltaMs = realMs - prevRealMs;
+        const elapsedHoursFromPrev = Math.max(0.001, deltaMs / (1000 * 60 * 60));
+        const driftFromPrevSeconds = currentOffsetSeconds - prevOffsetSeconds;
+        const dailyRateFromPrev_spd = (driftFromPrevSeconds / elapsedHoursFromPrev) * 24;
+
+        const sessionElapsedMs = realMs - (sessionStartRealTime || realMs);
+        const sessionElapsedHours = Math.max(0.001, sessionElapsedMs / (1000 * 60 * 60));
+        const sessionCumulativeDrift = currentOffsetSeconds - sessionStartOffset;
+        const sessionAverageRate_spd = (sessionCumulativeDrift / sessionElapsedHours) * 24;
+
+        return {
+          ...m,
+          sessionIndex: currentSessionIndex,
+          currentOffsetSeconds,
+          elapsedHoursFromPrev,
+          driftFromPrevSeconds,
+          dailyRateFromPrev_spd,
+          sessionCumulativeDrift,
+          sessionAverageRate_spd,
+        };
+      });
+    }
+
+    // CSV Exporter
+    function exportToCsv(watchName, measurements) {
+      const headers = [
+        'ID',
+        'Sesión',
+        'Fecha y Hora Real (Ref)',
+        'Hora Marcada Reloj',
+        'Posición Reloj',
+        'Desfase Puntual (s)',
+        'Horas Transcurridas',
+        'Desviación Tramo (s)',
+        'Tasa Diaria (seg/día)',
+        'Deriva Acumulada Sesión (s)',
+        '¿Reinicio/Puesta en hora?',
+        'Notas'
+      ];
+
+      const rows = measurements.map((m, idx) => [
+        idx + 1,
+        m.sessionIndex,
+        `"${m.realTime}"`,
+        `"${m.watchTime}"`,
+        `"${POSITION_NAMES[m.position] || m.position}"`,
+        m.currentOffsetSeconds.toFixed(1),
+        m.elapsedHoursFromPrev > 0 ? m.elapsedHoursFromPrev.toFixed(2) : '0',
+        m.driftFromPrevSeconds.toFixed(1),
+        m.dailyRateFromPrev_spd !== undefined ? m.dailyRateFromPrev_spd.toFixed(1) : '',
+        m.sessionCumulativeDrift.toFixed(1),
+        m.isReset ? 'SI' : 'NO',
+        `"${(m.notes || '').replace(/"/g, '""')}"`
+      ]);
+
+      return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    }
+
+    // --- SUBCOMPONENTS ---
+
+    // 1. Confirm Modal
+    const ConfirmModal = ({ isOpen, title, message, confirmLabel = 'Eliminar', variant = 'danger', onConfirm, onCancel }) => {
+      if (!isOpen) return null;
+      const isDanger = variant === 'danger';
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-sm w-full p-5 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isDanger ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
+                {isDanger ? <Trash2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+              </div>
+              <div className="space-y-1 flex-1">
+                <h3 className="text-sm font-bold text-slate-900 leading-snug">{title}</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">{message}</p>
+              </div>
+              <button onClick={onCancel} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button onClick={onCancel} className="px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 rounded-xl transition-colors">
+                Cancelar
+              </button>
+              <button
+                onClick={() => { onConfirm(); onCancel(); }}
+                className={`px-4 py-2 text-xs font-bold rounded-xl text-white shadow-sm transition-all active:scale-95 ${isDanger ? 'bg-rose-600 hover:bg-rose-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}
+              >
+                {confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // 2. Watch Time Comparator Component
+    const WatchTimeComparator = ({ currentWatch, lastMeasurement, onSaveMeasurement, onOpenNewWatchModal }) => {
+      const [isFrozen, setIsFrozen] = useState(false);
+      const [frozenRealTime, setFrozenRealTime] = useState(null);
+      const [liveNow, setLiveNow] = useState(new Date());
+
+      const [watchHours, setWatchHours] = useState(liveNow.getHours().toString().padStart(2, '0'));
+      const [watchMinutes, setWatchMinutes] = useState(liveNow.getMinutes().toString().padStart(2, '0'));
+      const [watchSeconds, setWatchSeconds] = useState(liveNow.getSeconds().toString().padStart(2, '0'));
+
+      const [position, setPosition] = useState('CH');
+      const [isResetSession, setIsResetSession] = useState(false);
+      const [notes, setNotes] = useState('');
+
+      useEffect(() => {
+        if (isFrozen) return;
+        const interval = setInterval(() => {
+          const now = new Date();
+          setLiveNow(now);
+        }, 200);
+        return () => clearInterval(interval);
+      }, [isFrozen]);
+
+      const effectiveRealDate = isFrozen && frozenRealTime ? frozenRealTime : liveNow;
+
+      const watchDate = useMemo(() => {
+        const d = new Date(effectiveRealDate);
+        const h = parseInt(watchHours, 10);
+        const m = parseInt(watchMinutes, 10);
+        const s = parseInt(watchSeconds, 10);
+        if (!isNaN(h)) d.setHours(h);
+        if (!isNaN(m)) d.setMinutes(m);
+        if (!isNaN(s)) d.setSeconds(s);
+        d.setMilliseconds(0);
+        return d;
+      }, [effectiveRealDate, watchHours, watchMinutes, watchSeconds]);
+
+      const liveDiffSeconds = (watchDate.getTime() - effectiveRealDate.getTime()) / 1000;
+
+      const rateEstimate = useMemo(() => {
+        if (!lastMeasurement) return null;
+        const prevRealMs = new Date(lastMeasurement.realTime).getTime();
+        const prevWatchMs = new Date(lastMeasurement.watchTime).getTime();
+        const prevDiff = (prevWatchMs - prevRealMs) / 1000;
+        const deltaMs = effectiveRealDate.getTime() - prevRealMs;
+        const hours = deltaMs / (1000 * 60 * 60);
+        if (hours < 0.05) return null;
+        const drift = liveDiffSeconds - prevDiff;
+        const spd = (drift / hours) * 24;
+        return { hours, drift, spd };
+      }, [effectiveRealDate, liveDiffSeconds, lastMeasurement]);
+
+      const handleFreezeToggle = () => {
+        if (!isFrozen) {
+          setFrozenRealTime(new Date());
+          setIsFrozen(true);
+        } else {
+          setIsFrozen(false);
+          setFrozenRealTime(null);
+        }
+      };
+
+      const handleSecondsZeroSync = () => {
+        const now = new Date();
+        setFrozenRealTime(now);
+        setIsFrozen(true);
+        setWatchHours(now.getHours().toString().padStart(2, '0'));
+        setWatchMinutes(now.getMinutes().toString().padStart(2, '0'));
+        setWatchSeconds('00');
+      };
+
+      const adjustWatchSeconds = (delta) => {
+        let s = parseInt(watchSeconds, 10) || 0;
+        let m = parseInt(watchMinutes, 10) || 0;
+        s += delta;
+        while (s >= 60) { s -= 60; m = (m + 1) % 60; }
+        while (s < 0) { s += 60; m = (m - 1 + 60) % 60; }
+        setWatchSeconds(s.toString().padStart(2, '0'));
+        setWatchMinutes(m.toString().padStart(2, '0'));
+      };
+
+      const handleSave = () => {
+        if (!currentWatch) {
+          onOpenNewWatchModal();
+          return;
+        }
+        onSaveMeasurement(
+          effectiveRealDate.toISOString(),
+          watchDate.toISOString(),
+          position,
+          isResetSession,
+          notes
+        );
+        setIsResetSession(false);
+        setNotes('');
+        setIsFrozen(false);
+        setFrozenRealTime(null);
+      };
+
+      const pad2 = (n) => n.toString().padStart(2, '0');
+
+      return (
+        <section className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+          <div className="bg-slate-900 text-white px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3 border-b border-slate-800">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+              <h2 className="text-xs sm:text-sm font-bold tracking-wide flex items-center gap-2">
+                <span>COMPARADOR DIRECTO DE DESVIACIÓN</span>
+                <span className="text-[10px] font-mono text-emerald-400/90 px-2 py-0.5 bg-emerald-950/70 rounded-full border border-emerald-500/30">
+                  Cálculo Automático
+                </span>
+              </h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleFreezeToggle}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95 ${
+                  isFrozen ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-xs' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                }`}
+              >
+                {isFrozen ? <Play className="w-3.5 h-3.5 fill-current" /> : <Pause className="w-3.5 h-3.5" />}
+                <span>{isFrozen ? 'Reanudar lectura' : 'Congelar instante'}</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            {/* Real Time Box */}
+            <div className="lg:col-span-4 bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-600 flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-emerald-600" />
+                  1. HORA REAL DE REFERENCIA
+                </span>
+                <span className="text-[11px] font-mono text-slate-400">Atómica / Sistema</span>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-200/80 p-3 text-center shadow-2xs">
+                <div className="font-mono text-3xl sm:text-4xl font-black tracking-tight text-slate-900">
+                  <span>{pad2(effectiveRealDate.getHours())}</span>:
+                  <span>{pad2(effectiveRealDate.getMinutes())}</span>:
+                  <span className="text-emerald-600">{pad2(effectiveRealDate.getSeconds())}</span>
+                </div>
+                <div className="text-[11px] text-slate-500 font-medium mt-1">
+                  {effectiveRealDate.toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleSecondsZeroSync}
+                className="w-full py-2 px-3 bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 rounded-lg text-xs font-bold transition-all active:scale-98 flex items-center justify-center gap-1.5"
+              >
+                <span>¡Mi segundero marca :00 ahora!</span>
+              </button>
+            </div>
+
+            {/* Watch Time Box */}
+            <div className="lg:col-span-4 bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-700 flex items-center gap-1.5">
+                  <Watch className="w-4 h-4 text-slate-700" />
+                  2. HORA DE TU RELOJ
+                </span>
+                <span className="text-[11px] font-semibold text-slate-500 truncate max-w-[130px]">
+                  {currentWatch ? currentWatch.name : 'Sin reloj'}
+                </span>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-200/80 p-2.5 shadow-2xs">
+                <div className="flex items-center justify-center gap-1.5 font-mono">
+                  <div className="flex flex-col items-center">
+                    <input
+                      type="number"
+                      min="0"
+                      max="23"
+                      value={watchHours}
+                      onChange={(e) => setWatchHours(e.target.value.padStart(2, '0').slice(-2))}
+                      className="w-14 text-center text-2xl font-bold bg-slate-50 border border-slate-200 rounded-lg py-1 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                    />
+                    <span className="text-[9px] text-slate-400 mt-0.5">HORAS</span>
+                  </div>
+                  <span className="text-2xl font-bold text-slate-400 -mt-3">:</span>
+                  <div className="flex flex-col items-center">
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={watchMinutes}
+                      onChange={(e) => setWatchMinutes(e.target.value.padStart(2, '0').slice(-2))}
+                      className="w-14 text-center text-2xl font-bold bg-slate-50 border border-slate-200 rounded-lg py-1 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                    />
+                    <span className="text-[9px] text-slate-400 mt-0.5">MIN</span>
+                  </div>
+                  <span className="text-2xl font-bold text-slate-400 -mt-3">:</span>
+                  <div className="flex flex-col items-center">
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={watchSeconds}
+                      onChange={(e) => setWatchSeconds(e.target.value.padStart(2, '0').slice(-2))}
+                      className="w-14 text-center text-2xl font-bold bg-slate-50 border border-slate-200 rounded-lg py-1 text-sky-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+                    />
+                    <span className="text-[9px] text-slate-400 mt-0.5 font-bold text-sky-700">SEG</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-center gap-1 text-xs">
+                <span className="text-[10px] text-slate-400 mr-1 font-semibold">Ajuste fino:</span>
+                {[-5, -1, 1, 5].map((val) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => adjustWatchSeconds(val)}
+                    className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-mono font-bold text-[11px] rounded transition-colors active:scale-95"
+                  >
+                    {val > 0 ? `+${val}s` : `${val}s`}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Live Calculation & Save Box */}
+            <div className="lg:col-span-4 bg-slate-900 text-white rounded-xl p-4 border border-slate-800 space-y-3.5 shadow-sm">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-300 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-emerald-400" />
+                  3. DESVIACIÓN CALCULADA
+                </span>
+                <span className="text-[10px] text-slate-400">Automático</span>
+              </div>
+              <div className="bg-slate-950/80 rounded-xl p-3 border border-slate-800 text-center space-y-1">
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">
+                  Desviación Puntual
+                </div>
+                <div className={`font-mono text-3xl sm:text-4xl font-black ${
+                  liveDiffSeconds > 0 ? 'text-emerald-400' : liveDiffSeconds < 0 ? 'text-amber-400' : 'text-slate-200'
+                }`}>
+                  {formatSeconds(liveDiffSeconds)}
+                </div>
+                <div className="text-xs font-medium text-slate-300">
+                  {liveDiffSeconds > 0
+                    ? `Adelanta ${Math.abs(liveDiffSeconds).toFixed(1)} segundos`
+                    : liveDiffSeconds < 0
+                    ? `Atrasa ${Math.abs(liveDiffSeconds).toFixed(1)} segundos`
+                    : 'Exacto al segundo (0.0s)'}
+                </div>
+                {rateEstimate && (
+                  <div className="pt-2 mt-2 border-t border-slate-800/80 flex items-center justify-around text-[11px]">
+                    <div>
+                      <span className="text-slate-400">En {rateEstimate.hours.toFixed(1)}h: </span>
+                      <span className="font-mono font-bold text-slate-200">{formatSeconds(rateEstimate.drift)}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Tasa: </span>
+                      <span className={`font-mono font-bold ${rateEstimate.spd > 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        {formatSpd(rateEstimate.spd)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <label className="text-[10px] text-slate-400 font-semibold block mb-1">Posición:</label>
+                  <select
+                    value={position}
+                    onChange={(e) => setPosition(e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2 py-1.5 focus:outline-none"
+                  >
+                    {Object.entries(POSITION_NAMES).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 font-semibold block mb-1">Puesta en hora:</label>
+                  <label className="flex items-center gap-1.5 text-xs text-slate-300 py-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isResetSession}
+                      onChange={(e) => setIsResetSession(e.target.checked)}
+                      className="rounded border-slate-700 text-emerald-600 focus:ring-0"
+                    />
+                    <span>Reinicio sesión</span>
+                  </label>
+                </div>
+              </div>
+              <input
+                type="text"
+                placeholder="Observaciones opcionales..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleSave}
+                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Registrar Medición Ahora</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      );
+    };
+
+    // 3. Watch Selector & Header Specs
+    const WatchSelector = ({ watches, selectedWatchId, onSelectWatch, onAddWatch, onEditWatch, activeSessionDrift, activeSessionRate }) => {
+      const currentWatch = watches.find(w => w.id === selectedWatchId) || watches[0];
+      if (!currentWatch) return null;
+
+      return (
+        <section className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
+              {watches.map(w => {
+                const isActive = w.id === currentWatch.id;
+                return (
+                  <button
+                    key={w.id}
+                    onClick={() => onSelectWatch(w.id)}
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                      isActive ? 'bg-slate-900 text-white shadow-xs' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: w.color }} />
+                    <span>{w.name}</span>
+                  </button>
+                );
+              })}
+              <button
+                onClick={onAddWatch}
+                className="flex items-center gap-1.5 px-3 py-2 border border-dashed border-slate-300 hover:border-slate-500 text-slate-600 rounded-xl text-xs font-medium transition-colors whitespace-nowrap"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Nuevo Reloj</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onEditWatch(currentWatch)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                <span>Editar ficha técnica</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-xs">
+            <div>
+              <span className="text-[10px] text-slate-400 block font-semibold">MARCA / MODELO</span>
+              <span className="font-bold text-slate-800">{currentWatch.brand} {currentWatch.model}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 block font-semibold">CALIBRE / OSCILACIÓN</span>
+              <span className="font-semibold text-slate-700">{currentWatch.caliber}</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 block font-semibold">TOLERANCIA FÁBRICA</span>
+              <span className="font-mono font-bold text-slate-700">
+                {currentWatch.targetRateMin > 0 ? `+${currentWatch.targetRateMin}` : currentWatch.targetRateMin} a +{currentWatch.targetRateMax} s/d
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 block font-semibold">RESERVA DE MARCHA</span>
+              <span className="font-semibold text-slate-700">{currentWatch.powerReserveHours} horas</span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 block font-semibold">DERIVA ACUMULADA</span>
+              <span className={`font-mono font-bold ${activeSessionDrift > 0 ? 'text-emerald-600' : activeSessionDrift < 0 ? 'text-amber-600' : 'text-slate-700'}`}>
+                {formatSeconds(activeSessionDrift)}
+              </span>
+            </div>
+            <div>
+              <span className="text-[10px] text-slate-400 block font-semibold">TASA MEDIA SESIÓN</span>
+              <span className={`font-mono font-bold ${activeSessionRate && activeSessionRate > 0 ? 'text-emerald-600' : activeSessionRate && activeSessionRate < 0 ? 'text-amber-600' : 'text-slate-700'}`}>
+                {formatSpd(activeSessionRate)}
+              </span>
+            </div>
+          </div>
+        </section>
+      );
+    };
+
+    // 4. Interactive Spreadsheet Component
+    const SheetGrid = ({ watchName, measurements, onAddMeasurement, onEditMeasurement, onDeleteMeasurement, onStartNewSession }) => {
+      const [copied, setCopied] = useState(false);
+      const [filterPosition, setFilterPosition] = useState('ALL');
+      const [deletingId, setDeletingId] = useState(null);
+
+      const filtered = useMemo(() => {
+        if (filterPosition === 'ALL') return measurements;
+        return measurements.filter(m => m.position === filterPosition);
+      }, [measurements, filterPosition]);
+
+      const handleExportCsv = () => {
+        const csv = exportToCsv(watchName, measurements);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Desviacion_${watchName.replace(/\s+/g, '_')}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+
+      const handleCopyTable = () => {
+        const tsv = measurements.map((m, i) => [
+          i + 1,
+          m.realTime,
+          m.watchTime,
+          POSITION_NAMES[m.position] || m.position,
+          m.currentOffsetSeconds.toFixed(1),
+          m.elapsedHoursFromPrev.toFixed(2),
+          m.driftFromPrevSeconds.toFixed(1),
+          m.dailyRateFromPrev_spd !== undefined ? m.dailyRateFromPrev_spd.toFixed(1) : '',
+          m.notes || ''
+        ].join('\t')).join('\n');
+
+        navigator.clipboard.writeText(tsv);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      };
+
+      return (
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden space-y-3 p-4 sm:p-5">
+          {/* Toolbar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                <Table className="w-4 h-4 text-emerald-600" />
+                <span>Hoja de Cálculo Horológica</span>
+              </span>
+              <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-semibold">
+                {measurements.length} {measurements.length === 1 ? 'fila' : 'filas'}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={filterPosition}
+                onChange={(e) => setFilterPosition(e.target.value)}
+                className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none"
+              >
+                <option value="ALL">Todas las posiciones</option>
+                {Object.entries(POSITION_NAMES).map(([k, name]) => (
+                  <option key={k} value={k}>{name}</option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={handleCopyTable}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors"
+                title="Copiar datos tabulados para pegar directamente en Excel o Google Sheets"
+              >
+                {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
+                <span>{copied ? '¡Copiado!' : 'Copiar para Excel'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Descargar CSV</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={onStartNewSession}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Puesta en hora (Reset)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold text-[11px] uppercase tracking-wider">
+                  <th className="py-2.5 px-3 w-10 text-center">#</th>
+                  <th className="py-2.5 px-3">Fecha y Hora Real (Ref)</th>
+                  <th className="py-2.5 px-3">Hora del Reloj</th>
+                  <th className="py-2.5 px-3">Posición</th>
+                  <th className="py-2.5 px-3 text-right">Desfase Puntual</th>
+                  <th className="py-2.5 px-3 text-right">Tiempo Transc.</th>
+                  <th className="py-2.5 px-3 text-right">Desv. Tramo</th>
+                  <th className="py-2.5 px-3 text-right">Tasa Diaria</th>
+                  <th className="py-2.5 px-3">Observaciones</th>
+                  <th className="py-2.5 px-3 text-center w-20">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan="10" className="py-8 text-center text-slate-400">
+                      <Clock className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                      <p className="font-medium text-slate-600">No hay mediciones registradas</p>
+                      <p className="text-[11px] text-slate-400 mt-1">Usa el comparador superior para registrar tu primera lectura.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((m, idx) => (
+                    <tr key={m.id} className={`hover:bg-slate-50/80 transition-colors ${m.isReset ? 'bg-amber-50/40' : ''}`}>
+                      <td className="py-2.5 px-3 text-center font-mono text-slate-400">{idx + 1}</td>
+                      <td className="py-2.5 px-3 font-mono text-slate-800">{formatDateShort(m.realTime)}</td>
+                      <td className="py-2.5 px-3 font-mono text-slate-800">{formatDateShort(m.watchTime)}</td>
+                      <td className="py-2.5 px-3">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-medium">
+                          {POSITION_NAMES[m.position] || m.position}
+                        </span>
+                      </td>
+                      <td className={`py-2.5 px-3 text-right font-mono font-bold ${
+                        m.currentOffsetSeconds > 0 ? 'text-emerald-600' : m.currentOffsetSeconds < 0 ? 'text-amber-600' : 'text-slate-700'
+                      }`}>
+                        {formatSeconds(m.currentOffsetSeconds)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-slate-600">
+                        {m.elapsedHoursFromPrev > 0 ? `${m.elapsedHoursFromPrev.toFixed(1)}h` : '--'}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-700">
+                        {m.isReset ? (
+                          <span className="text-[10px] text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded font-bold">PUESTA EN HORA</span>
+                        ) : (
+                          formatSeconds(m.driftFromPrevSeconds)
+                        )}
+                      </td>
+                      <td className={`py-2.5 px-3 text-right font-mono font-bold ${
+                        m.dailyRateFromPrev_spd && m.dailyRateFromPrev_spd > 0 ? 'text-emerald-600' : m.dailyRateFromPrev_spd && m.dailyRateFromPrev_spd < 0 ? 'text-amber-600' : 'text-slate-500'
+                      }`}>
+                        {formatSpd(m.dailyRateFromPrev_spd)}
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-600 max-w-xs truncate" title={m.notes}>
+                        {m.notes || <span className="text-slate-300 italic">--</span>}
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        {deletingId === m.id ? (
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => { onDeleteMeasurement(m.id); setDeletingId(null); }}
+                              className="px-2 py-0.5 bg-rose-600 text-white rounded text-[10px] font-bold shadow-xs hover:bg-rose-500"
+                            >
+                              Borrar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingId(null)}
+                              className="p-0.5 text-slate-400 hover:text-slate-600"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => onEditMeasurement(m)}
+                              className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded"
+                              title="Editar"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeletingId(m.id)}
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded"
+                              title="Eliminar fila"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      );
+    };
+
+    // 5. Position Analysis Component
+    const PositionAnalysis = ({ watch, measurements }) => {
+      const positionStats = useMemo(() => {
+        const stats = {};
+        Object.keys(POSITION_NAMES).forEach(pos => {
+          stats[pos] = { rates: [], count: 0, sum: 0, min: Infinity, max: -Infinity };
+        });
+
+        measurements.forEach(m => {
+          if (!m.isReset && m.dailyRateFromPrev_spd !== undefined && !isNaN(m.dailyRateFromPrev_spd)) {
+            const pos = m.position;
+            if (stats[pos]) {
+              stats[pos].rates.push(m.dailyRateFromPrev_spd);
+              stats[pos].count += 1;
+              stats[pos].sum += m.dailyRateFromPrev_spd;
+              if (m.dailyRateFromPrev_spd < stats[pos].min) stats[pos].min = m.dailyRateFromPrev_spd;
+              if (m.dailyRateFromPrev_spd > stats[pos].max) stats[pos].max = m.dailyRateFromPrev_spd;
+            }
+          }
+        });
+
+        return stats;
+      }, [measurements]);
+
+      const positionsWithData = Object.entries(positionStats).filter(([_, s]) => s.count > 0);
+
+      const bestPositionToCompensate = useMemo(() => {
+        if (positionsWithData.length === 0) return null;
+        let slowest = null;
+        let fastest = null;
+        positionsWithData.forEach(([pos, s]) => {
+          const avg = s.sum / s.count;
+          if (!slowest || avg < slowest.avg) slowest = { pos, avg };
+          if (!fastest || avg > fastest.avg) fastest = { pos, avg };
+        });
+        return { slowest, fastest };
+      }, [positionsWithData]);
+
+      return (
+        <section className="space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs">
+            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
+              <Compass className="w-4 h-4 text-emerald-600" />
+              <span>Análisis de Precisión por Posiciones (6 Posiciones + Cargador)</span>
+            </h3>
+            <p className="text-xs text-slate-500 leading-relaxed mb-4">
+              Los relojes mecánicos varían su marcha según la orientación respecto a la gravedad debido al efecto sobre el volante y la espiral. Conociendo qué posición adelanta o atrasa, puedes dejar el reloj en la mesita por la noche para autocompensar la desviación diaria.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {Object.entries(POSITION_NAMES).map(([posKey, posName]) => {
+                const s = positionStats[posKey];
+                const avg = s.count > 0 ? s.sum / s.count : null;
+                const hasData = s.count > 0;
+
+                return (
+                  <div key={posKey} className={`p-3.5 rounded-xl border transition-all ${hasData ? 'bg-white border-slate-200 shadow-2xs' : 'bg-slate-50/50 border-slate-200/60 opacity-60'}`}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-bold text-xs text-slate-800">{posName}</span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold">{posKey}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mb-2 leading-tight">{POSITION_DESCRIPTIONS[posKey]}</p>
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                      <span className="text-slate-500 text-[11px]">{s.count} {s.count === 1 ? 'lectura' : 'lecturas'}</span>
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-400 block">Tasa Media:</span>
+                        <span className={`font-mono font-bold text-sm ${avg && avg > 0 ? 'text-emerald-600' : avg && avg < 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                          {hasData ? formatSpd(avg) : 'Sin datos'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {bestPositionToCompensate && (
+            <div className="bg-emerald-950 text-emerald-100 rounded-2xl p-4 sm:p-5 border border-emerald-800 shadow-xs flex items-start gap-3.5">
+              <Sparkles className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="space-y-1 text-xs">
+                <h4 className="font-bold text-white text-sm">Consejo Horológico de Autocompensación:</h4>
+                <p className="leading-relaxed text-emerald-200">
+                  {bestPositionToCompensate.slowest && bestPositionToCompensate.slowest.avg < 0 ? (
+                    <span>
+                      Si tu reloj tiende a adelantar en la muñeca, déjalo reposar por la noche en posición <strong>{POSITION_NAMES[bestPositionToCompensate.slowest.pos]}</strong> (media de {formatSpd(bestPositionToCompensate.slowest.avg)}) para frenar la ganancia.
+                    </span>
+                  ) : bestPositionToCompensate.fastest ? (
+                    <span>
+                      La marcha más acelerada registrada es en posición <strong>{POSITION_NAMES[bestPositionToCompensate.fastest.pos]}</strong> ({formatSpd(bestPositionToCompensate.fastest.avg)}).
+                    </span>
+                  ) : null}
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
+      );
+    };
+
+    // 6. Interactive Performance SVG Charts
+    const PerformanceCharts = ({ watch, measurements }) => {
+      const validPoints = useMemo(() => {
+        return measurements.filter(m => m.currentOffsetSeconds !== undefined);
+      }, [measurements]);
+
+      if (validPoints.length < 2) {
+        return (
+          <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-2">
+            <LineChart className="w-8 h-8 mx-auto text-slate-400" />
+            <h4 className="text-sm font-bold text-slate-700">Se necesitan al menos 2 mediciones</h4>
+            <p className="text-xs text-slate-400">Registra lecturas adicionales para generar las curvas temporales de desviación y tasa diaria.</p>
+          </div>
+        );
+      }
+
+      // Compute scales for SVG chart
+      const offsets = validPoints.map(p => p.currentOffsetSeconds);
+      const minOffset = Math.min(...offsets, -2);
+      const maxOffset = Math.max(...offsets, 2);
+      const rangeOffset = (maxOffset - minOffset) || 1;
+
+      const W = 700;
+      const H = 220;
+      const PAD_X = 40;
+      const PAD_Y = 30;
+
+      const getX = (idx) => PAD_X + (idx / (validPoints.length - 1)) * (W - PAD_X * 2);
+      const getY = (val) => H - PAD_Y - ((val - minOffset) / rangeOffset) * (H - PAD_Y * 2);
+
+      const pointsString = validPoints.map((p, idx) => `${getX(idx)},${getY(p.currentOffsetSeconds)}`).join(' ');
+      const zeroY = getY(0);
+
+      return (
+        <section className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <LineChart className="w-4 h-4 text-emerald-600" />
+                <span>Evolución Temporal de la Desviación (Segundos)</span>
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">Línea continua de deriva acumulada a lo largo del tiempo</p>
+            </div>
+            <div className="flex items-center gap-3 text-xs">
+              <span className="flex items-center gap-1.5 font-mono text-emerald-600 font-bold">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                Último: {formatSeconds(validPoints[validPoints.length - 1].currentOffsetSeconds)}
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-slate-50/60 rounded-xl p-3 border border-slate-200/80 overflow-x-auto">
+            <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto min-w-[500px]">
+              {/* Grid Lines */}
+              <line x1={PAD_X} y1={PAD_Y} x2={W - PAD_X} y2={PAD_Y} stroke="#e2e8f0" strokeDasharray="3 3" />
+              <line x1={PAD_X} y1={H - PAD_Y} x2={W - PAD_X} y2={H - PAD_Y} stroke="#e2e8f0" strokeDasharray="3 3" />
+              {zeroY >= PAD_Y && zeroY <= H - PAD_Y && (
+                <line x1={PAD_X} y1={zeroY} x2={W - PAD_X} y2={zeroY} stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="4 4" />
+              )}
+
+              {/* Data Path */}
+              <polyline fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" points={pointsString} />
+
+              {/* Points */}
+              {validPoints.map((p, idx) => {
+                const cx = getX(idx);
+                const cy = getY(p.currentOffsetSeconds);
+                return (
+                  <g key={p.id}>
+                    <circle cx={cx} cy={cy} r="4.5" fill="#ffffff" stroke="#059669" strokeWidth="2" />
+                    <text x={cx} y={cy - 10} textAnchor="middle" fontSize="10" fontFamily="monospace" fill="#334155" fontWeight="bold">
+                      {formatSeconds(p.currentOffsetSeconds)}
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+        </section>
+      );
+    };
+
+    // 7. Add/Edit Measurement Modal
+    const AddMeasurementModal = ({ isOpen, onClose, onSave, watchId, initialData, defaultIsReset }) => {
+      if (!isOpen) return null;
+
+      const now = new Date();
+      const pad = (n) => n.toString().padStart(2, '0');
+      const toIsoStringLocal = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+
+      const [realTime, setRealTime] = useState(initialData ? initialData.realTime.slice(0, 19) : toIsoStringLocal(now));
+      const [watchTime, setWatchTime] = useState(initialData ? initialData.watchTime.slice(0, 19) : toIsoStringLocal(now));
+      const [position, setPosition] = useState(initialData ? initialData.position : 'CH');
+      const [isReset, setIsReset] = useState(initialData ? !!initialData.isReset : defaultIsReset);
+      const [notes, setNotes] = useState(initialData ? initialData.notes || '' : '');
+
+      const handleSetCurrentTime = () => {
+        const cur = new Date();
+        setRealTime(toIsoStringLocal(cur));
+      };
+
+      const handleSecondZero = () => {
+        const cur = new Date();
+        const base = toIsoStringLocal(cur);
+        const zeroTime = `${base.slice(0, 17)}00`;
+        setRealTime(base);
+        setWatchTime(zeroTime);
+      };
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        onSave({
+          id: initialData ? initialData.id : `m-${Date.now()}`,
+          watchId,
+          realTime: new Date(realTime).toISOString(),
+          watchTime: new Date(watchTime).toISOString(),
+          position,
+          isReset,
+          notes: notes.trim(),
+        });
+        onClose();
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-bold text-sm text-slate-800">
+                {initialData ? 'Editar Medición' : 'Registrar Nueva Medición'}
+              </h3>
+              <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-semibold text-slate-700">Hora Real (Referencia):</label>
+                  <button type="button" onClick={handleSetCurrentTime} className="text-emerald-600 font-semibold underline text-[11px]">
+                    Hora actual
+                  </button>
+                </div>
+                <input
+                  type="datetime-local"
+                  step="1"
+                  required
+                  value={realTime}
+                  onChange={(e) => setRealTime(e.target.value)}
+                  className="w-full font-mono bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-semibold text-slate-700">Hora de tu Reloj:</label>
+                  <button type="button" onClick={handleSecondZero} className="text-sky-600 font-semibold underline text-[11px]">
+                    Segundero en :00 ahora
+                  </button>
+                </div>
+                <input
+                  type="datetime-local"
+                  step="1"
+                  required
+                  value={watchTime}
+                  onChange={(e) => setWatchTime(e.target.value)}
+                  className="w-full font-mono bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Posición del Reloj:</label>
+                <select
+                  value={position}
+                  onChange={(e) => setPosition(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"
+                >
+                  {Object.entries(POSITION_NAMES).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="modal-reset-chk"
+                  checked={isReset}
+                  onChange={(e) => setIsReset(e.target.checked)}
+                  className="rounded border-slate-300 text-emerald-600"
+                />
+                <label htmlFor="modal-reset-chk" className="font-semibold text-slate-700">
+                  ¿Puesta en hora? (Inicia nueva sesión de cálculo)
+                </label>
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Observaciones:</label>
+                <input
+                  type="text"
+                  placeholder="Ej: tras 8h en muñeca, mesita de noche..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+                <button type="button" onClick={onClose} className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl">
+                  Cancelar
+                </button>
+                <button type="submit" className="px-4 py-2 font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-sm">
+                  Guardar Medición
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    };
+
+    // 8. Watch Modal (Add/Edit)
+    const WatchModal = ({ isOpen, onClose, onSave, onDelete, initialWatch, canDelete }) => {
+      if (!isOpen) return null;
+
+      const [brand, setBrand] = useState(initialWatch ? initialWatch.brand : '');
+      const [name, setName] = useState(initialWatch ? initialWatch.name : '');
+      const [model, setModel] = useState(initialWatch ? initialWatch.model : '');
+      const [caliber, setCaliber] = useState(initialWatch ? initialWatch.caliber : '28,800 bph');
+      const [targetRateMin, setTargetRateMin] = useState(initialWatch ? initialWatch.targetRateMin : -10);
+      const [targetRateMax, setTargetRateMax] = useState(initialWatch ? initialWatch.targetRateMax : 15);
+      const [powerReserveHours, setPowerReserveHours] = useState(initialWatch ? initialWatch.powerReserveHours : 42);
+      const [color, setColor] = useState(initialWatch ? initialWatch.color : COLOR_OPTIONS[0]);
+      const [confirmDelete, setConfirmDelete] = useState(false);
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        onSave({
+          id: initialWatch ? initialWatch.id : `watch-${Date.now()}`,
+          name: name.trim() || 'Mi Reloj',
+          brand: brand.trim() || 'Reloj Automático',
+          model: model.trim() || 'Estándar',
+          caliber: caliber.trim(),
+          targetRateMin: Number(targetRateMin),
+          targetRateMax: Number(targetRateMax),
+          powerReserveHours: Number(powerReserveHours),
+          color,
+          notes: ''
+        });
+        onClose();
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-bold text-sm text-slate-800">
+                {initialWatch ? 'Editar Ficha del Reloj' : 'Añadir Nuevo Reloj a la Colección'}
+              </h3>
+              <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Nombre Corto:</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej: Prospex, Seamaster..."
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Marca:</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej: Seiko, Omega..."
+                    value={brand}
+                    onChange={(e) => setBrand(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Modelo:</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: SPB143, Diver 300M"
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Calibre:</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Calibre 6R35"
+                    value={caliber}
+                    onChange={(e) => setCaliber(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Min (s/d):</label>
+                  <input
+                    type="number"
+                    value={targetRateMin}
+                    onChange={(e) => setTargetRateMin(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Max (s/d):</label>
+                  <input
+                    type="number"
+                    value={targetRateMax}
+                    onChange={(e) => setTargetRateMax(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Reserva (h):</label>
+                  <input
+                    type="number"
+                    value={powerReserveHours}
+                    onChange={(e) => setPowerReserveHours(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1.5">Color de Distintivo:</label>
+                <div className="flex items-center gap-2">
+                  {COLOR_OPTIONS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setColor(c)}
+                      className={`w-6 h-6 rounded-full border-2 transition-transform ${color === c ? 'scale-110 border-slate-800' : 'border-transparent'}`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                {initialWatch && onDelete && canDelete ? (
+                  confirmDelete ? (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => { onDelete(initialWatch.id); onClose(); }}
+                        className="px-2.5 py-1.5 bg-rose-600 text-white rounded-lg text-xs font-bold"
+                      >
+                        Confirmar Borrado
+                      </button>
+                      <button type="button" onClick={() => setConfirmDelete(false)} className="text-xs text-slate-500">
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDelete(true)}
+                      className="px-2.5 py-1.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-xs font-semibold"
+                    >
+                      Eliminar reloj
+                    </button>
+                  )
+                ) : <span />}
+
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={onClose} className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl">
+                    Cancelar
+                  </button>
+                  <button type="submit" className="px-4 py-2 font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-sm">
+                    Guardar Reloj
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    };
+
+    // --- SUPABASE SYNC MODAL ---
+    const SupabaseModal = ({ isOpen, onClose, syncStatus, lastSyncTime, syncError, onSync, onPushLocal, onPullRemote, watchesCount, measurementsCount }) => {
+      if (!isOpen) return null;
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden">
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                  <Cloud className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm">Sincronización en la Nube Supabase</h3>
+                  <p className="text-[11px] text-slate-300">Base de datos PostgreSQL en tiempo real</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-xs text-slate-600">
+              {/* Status Box */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-slate-700">Estado de conexión:</span>
+                  <span className="flex items-center gap-1.5 font-bold">
+                    {syncStatus === 'synced' && (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-xs" />
+                        <span className="text-emerald-700">Conectado y Sincronizado</span>
+                      </>
+                    )}
+                    {syncStatus === 'syncing' && (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                        <span className="text-amber-700">Sincronizando...</span>
+                      </>
+                    )}
+                    {syncStatus === 'error' && (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-rose-500" />
+                        <span className="text-rose-700">Error de conexión</span>
+                      </>
+                    )}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between pt-1 border-t border-slate-200/70 text-[11px]">
+                  <span className="text-slate-500">Servidor Supabase:</span>
+                  <span className="font-mono text-slate-700 truncate max-w-[200px]" title="https://rqbkvhhpxqtzqaypotir.supabase.co">
+                    rqbkvhhpxqtzqaypotir.supabase.co
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between pt-1 border-t border-slate-200/70 text-[11px]">
+                  <span className="text-slate-500">Última sincronización:</span>
+                  <span className="text-slate-700 font-medium">
+                    {lastSyncTime ? lastSyncTime.toLocaleTimeString('es-ES') : 'Al iniciar'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between pt-1 border-t border-slate-200/70 text-[11px]">
+                  <span className="text-slate-500">Datos activos:</span>
+                  <span className="text-slate-700 font-medium">
+                    {watchesCount} {watchesCount === 1 ? 'reloj' : 'relojes'} · {measurementsCount} {measurementsCount === 1 ? 'medición' : 'mediciones'}
+                  </span>
+                </div>
+              </div>
+
+              {syncError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-[11px] flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">Aviso de sincronización</p>
+                    <p className="text-rose-600">{syncError}</p>
+                    <p className="mt-1 text-slate-500 text-[10px]">Tus datos siguen estando 100% seguros y guardados en tu navegador (localStorage).</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="space-y-2 pt-1">
+                <p className="font-bold text-slate-800 text-[11px] uppercase tracking-wider">Acciones en la Nube</p>
+                <button
+                  type="button"
+                  onClick={() => { onSync(); onClose(); }}
+                  disabled={syncStatus === 'syncing'}
+                  className="w-full py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-98 shadow-xs"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+                  <span>Sincronizar ahora (Nube ⇄ Local)</span>
+                </button>
+
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => { onPushLocal(); onClose(); }}
+                    className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold flex items-center justify-center gap-1.5 transition-colors text-[11px]"
+                    title="Subir todos los datos actuales de este navegador a Supabase"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Subir a Supabase</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { onPullRemote(); onClose(); }}
+                    className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold flex items-center justify-center gap-1.5 transition-colors text-[11px]"
+                    title="Recargar desde Supabase y reemplazar datos locales"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Bajar de Supabase</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-2 text-[10px] text-slate-400 border-t border-slate-100 leading-relaxed">
+                Cada vez que añades, editas o eliminas un reloj o medición, se actualiza automáticamente tanto en Supabase como en tu disco local.
+              </div>
+            </div>
+
+            <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-lg font-semibold text-xs transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // --- MAIN APP COMPONENT ---
+    function App() {
+      // Watches state
+      const [watches, setWatches] = useState(() => {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY_WATCHES);
+          if (saved) return JSON.parse(saved);
+        } catch (e) {
+          console.error(e);
+        }
+        return INITIAL_WATCHES;
+      });
+
+      // Measurements state
+      const [rawMeasurements, setRawMeasurements] = useState(() => {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY_MEASUREMENTS);
+          if (saved) return JSON.parse(saved);
+        } catch (e) {
+          console.error(e);
+        }
+        return [];
+      });
+
+      const [selectedWatchId, setSelectedWatchId] = useState(() => {
+        return watches[0] ? watches[0].id : '';
+      });
+
+      // Supabase Cloud Sync States
+      const [syncStatus, setSyncStatus] = useState('syncing'); // 'synced' | 'syncing' | 'error'
+      const [lastSyncTime, setLastSyncTime] = useState(null);
+      const [syncError, setSyncError] = useState(null);
+      const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
+
+      // Local storage persistence
+      useEffect(() => {
+        try {
+          localStorage.setItem(STORAGE_KEY_WATCHES, JSON.stringify(watches));
+        } catch (e) {
+          console.error(e);
+        }
+      }, [watches]);
+
+      useEffect(() => {
+        try {
+          localStorage.setItem(STORAGE_KEY_MEASUREMENTS, JSON.stringify(rawMeasurements));
+        } catch (e) {
+          console.error(e);
+        }
+      }, [rawMeasurements]);
+
+      const [activeTab, setActiveTab] = useState('SHEETS');
+      const [isMeasurementModalOpen, setIsMeasurementModalOpen] = useState(false);
+      const [editingMeasurement, setEditingMeasurement] = useState(null);
+      const [modalDefaultIsReset, setModalDefaultIsReset] = useState(false);
+
+      const [isWatchModalOpen, setIsWatchModalOpen] = useState(false);
+      const [editingWatch, setEditingWatch] = useState(null);
+
+      const [confirmDialog, setConfirmDialog] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        confirmLabel: 'Confirmar',
+        variant: 'danger',
+        onConfirm: () => {}
+      });
+
+      const [toastMessage, setToastMessage] = useState(null);
+      const showToast = (msg) => {
+        setToastMessage(msg);
+        setTimeout(() => setToastMessage(null), 3000);
+      };
+
+      // Bidirectional Sync with Supabase
+      const syncWithSupabase = async (forcePushLocal = false, notify = false) => {
+        setSyncStatus('syncing');
+        setSyncError(null);
+        try {
+          const [remoteWatches, remoteMeasurements] = await Promise.all([
+            supabaseApi.fetchWatches(),
+            supabaseApi.fetchMeasurements()
+          ]);
+
+          if (!forcePushLocal && remoteWatches.length > 0) {
+            // Supabase already has data: adopt Supabase as truth
+            setWatches(remoteWatches);
+            setRawMeasurements(remoteMeasurements);
+            if (!remoteWatches.some(w => w.id === selectedWatchId)) {
+              setSelectedWatchId(remoteWatches[0].id);
+            }
+            setSyncStatus('synced');
+            setLastSyncTime(new Date());
+            if (notify) showToast('Nube Supabase sincronizada');
+          } else {
+            // Supabase is empty (or forced push): push current local data to Supabase
+            await supabaseApi.upsertWatchesBatch(watches);
+            if (rawMeasurements.length > 0) {
+              await supabaseApi.upsertMeasurementsBatch(rawMeasurements);
+            }
+            setSyncStatus('synced');
+            setLastSyncTime(new Date());
+            if (notify) showToast('Datos respaldados en Supabase');
+          }
+        } catch (err) {
+          console.error('Supabase sync error:', err);
+          setSyncStatus('error');
+          setSyncError(err.message || 'Error de conexión con Supabase');
+          if (notify) showToast('Error al conectar con Supabase (Modo local activo)');
+        }
+      };
+
+      // Pull from Supabase
+      const pullFromSupabase = async () => {
+        setSyncStatus('syncing');
+        try {
+          const [remoteWatches, remoteMeasurements] = await Promise.all([
+            supabaseApi.fetchWatches(),
+            supabaseApi.fetchMeasurements()
+          ]);
+          if (remoteWatches.length > 0) {
+            setWatches(remoteWatches);
+            setRawMeasurements(remoteMeasurements);
+            if (!remoteWatches.some(w => w.id === selectedWatchId)) {
+              setSelectedWatchId(remoteWatches[0].id);
+            }
+            setSyncStatus('synced');
+            setLastSyncTime(new Date());
+            showToast('Datos descargados desde Supabase');
+          } else {
+            setSyncStatus('synced');
+            showToast('No hay datos remotos en Supabase');
+          }
+        } catch (err) {
+          console.error(err);
+          setSyncStatus('error');
+          setSyncError(err.message);
+          showToast('Error al descargar de Supabase');
+        }
+      };
+
+      // Push all to Supabase
+      const pushToSupabase = async () => {
+        setSyncStatus('syncing');
+        try {
+          await supabaseApi.upsertWatchesBatch(watches);
+          if (rawMeasurements.length > 0) {
+            await supabaseApi.upsertMeasurementsBatch(rawMeasurements);
+          }
+          setSyncStatus('synced');
+          setLastSyncTime(new Date());
+          showToast('Todos los datos locales subidos a Supabase');
+        } catch (err) {
+          console.error(err);
+          setSyncStatus('error');
+          setSyncError(err.message);
+          showToast('Error al subir a Supabase');
+        }
+      };
+
+      // Initial Mount: Sync automatically with Supabase
+      useEffect(() => {
+        syncWithSupabase(false, false);
+      }, []);
+
+      const currentWatch = useMemo(() => {
+        return watches.find(w => w.id === selectedWatchId) || watches[0] || null;
+      }, [watches, selectedWatchId]);
+
+      const calculatedMeasurements = useMemo(() => {
+        if (!currentWatch) return [];
+        const forThis = rawMeasurements.filter(m => m.watchId === currentWatch.id);
+        return calculateMeasurements(forThis);
+      }, [rawMeasurements, currentWatch]);
+
+      const lastMeasurement = useMemo(() => {
+        if (calculatedMeasurements.length === 0) return null;
+        return calculatedMeasurements[calculatedMeasurements.length - 1];
+      }, [calculatedMeasurements]);
+
+      const activeSessionDrift = lastMeasurement ? lastMeasurement.sessionCumulativeDrift : 0;
+      const activeSessionRate = lastMeasurement ? lastMeasurement.sessionAverageRate_spd : undefined;
+
+      // Handlers with Supabase Cloud Sync
+      const handleDirectSaveMeasurement = async (realIso, watchIso, pos, isReset, notes) => {
+        if (!currentWatch) return;
+        const newM = {
+          id: `m-${Date.now()}`,
+          watchId: currentWatch.id,
+          realTime: realIso,
+          watchTime: watchIso,
+          position: pos,
+          isReset,
+          notes: notes.trim(),
+        };
+        // 1. Local update
+        setRawMeasurements(prev => [...prev, newM]);
+        showToast('Medición guardada');
+
+        // 2. Cloud Supabase update
+        try {
+          await supabaseApi.upsertMeasurement(newM);
+          setSyncStatus('synced');
+          setLastSyncTime(new Date());
+        } catch (err) {
+          console.error(err);
+          setSyncStatus('error');
+          setSyncError(err.message);
+        }
+      };
+
+      const handleDeleteMeasurement = async (id) => {
+        setRawMeasurements(prev => prev.filter(m => m.id !== id));
+        showToast('Fila eliminada');
+        try {
+          await supabaseApi.deleteMeasurement(id);
+          setSyncStatus('synced');
+          setLastSyncTime(new Date());
+        } catch (err) {
+          console.error(err);
+          setSyncStatus('error');
+          setSyncError(err.message);
+        }
+      };
+
+      const handleSaveMeasurement = async (item) => {
+        setRawMeasurements(prev => {
+          const exists = prev.some(m => m.id === item.id);
+          if (exists) return prev.map(m => m.id === item.id ? item : m);
+          return [...prev, item];
+        });
+        showToast('Medición guardada');
+        try {
+          await supabaseApi.upsertMeasurement(item);
+          setSyncStatus('synced');
+          setLastSyncTime(new Date());
+        } catch (err) {
+          console.error(err);
+          setSyncStatus('error');
+          setSyncError(err.message);
+        }
+      };
+
+      const handleSaveWatch = async (savedWatch) => {
+        setWatches(prev => {
+          const exists = prev.some(w => w.id === savedWatch.id);
+          if (exists) return prev.map(w => w.id === savedWatch.id ? savedWatch : w);
+          return [...prev, savedWatch];
+        });
+        setSelectedWatchId(savedWatch.id);
+        showToast(`Reloj ${savedWatch.name} guardado`);
+        try {
+          await supabaseApi.upsertWatch(savedWatch);
+          setSyncStatus('synced');
+          setLastSyncTime(new Date());
+        } catch (err) {
+          console.error(err);
+          setSyncStatus('error');
+          setSyncError(err.message);
+        }
+      };
+
+      const handleDeleteWatch = async (watchId) => {
+        const remaining = watches.filter(w => w.id !== watchId);
+        setWatches(remaining);
+        setRawMeasurements(prev => prev.filter(m => m.watchId !== watchId));
+        if (remaining.length > 0) setSelectedWatchId(remaining[0].id);
+        else setSelectedWatchId('');
+        showToast('Reloj eliminado');
+        try {
+          await supabaseApi.deleteWatch(watchId);
+          setSyncStatus('synced');
+          setLastSyncTime(new Date());
+        } catch (err) {
+          console.error(err);
+          setSyncStatus('error');
+          setSyncError(err.message);
+        }
+      };
+
+      const handleClearAllData = () => {
+        setConfirmDialog({
+          isOpen: true,
+          title: '¿Borrar todos los datos de Supabase y local?',
+          message: '¿Deseas borrar TODOS los datos para empezar desde cero? Esta acción limpiará tanto tu navegador como tu base de datos Supabase.',
+          confirmLabel: 'Borrar todo',
+          variant: 'danger',
+          onConfirm: async () => {
+            setWatches(INITIAL_WATCHES);
+            setRawMeasurements([]);
+            setSelectedWatchId(INITIAL_WATCHES[0].id);
+            try {
+              await supabaseApi.clearAll();
+              await supabaseApi.upsertWatchesBatch(INITIAL_WATCHES);
+              setSyncStatus('synced');
+              setLastSyncTime(new Date());
+              showToast('Colección y Supabase reiniciados limpios');
+            } catch (err) {
+              console.error(err);
+              showToast('Colección reiniciada localmente');
+            }
+          }
+        });
+      };
+
+      const handleRestoreDemoData = () => {
+        setConfirmDialog({
+          isOpen: true,
+          title: '¿Cargar datos de ejemplo en Supabase?',
+          message: 'Se cargará un reloj de prueba con 4 mediciones calculadas en diferentes posiciones y se sincronizará con Supabase.',
+          confirmLabel: 'Cargar ejemplo',
+          variant: 'primary',
+          onConfirm: async () => {
+            const demoW = DEMO_SAMPLE_WATCHES;
+            const demoM = generateDemoMeasurements();
+            setWatches(demoW);
+            setRawMeasurements(demoM);
+            setSelectedWatchId(demoW[0].id);
+            try {
+              await supabaseApi.clearAll();
+              await supabaseApi.upsertWatchesBatch(demoW);
+              await supabaseApi.upsertMeasurementsBatch(demoM);
+              setSyncStatus('synced');
+              setLastSyncTime(new Date());
+              showToast('Datos de prueba guardados en Supabase');
+            } catch (err) {
+              console.error(err);
+              showToast('Datos de prueba cargados localmente');
+            }
+          }
+        });
+      };
+
+      const handleExportJson = () => {
+        const data = {
+          app: 'Horology Sheets Standalone with Supabase',
+          version: '3.1',
+          supabaseProject: 'rqbkvhhpxqtzqaypotir',
+          exportDate: new Date().toISOString(),
+          watches,
+          measurements: rawMeasurements
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Horology_Sheets_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Copia de seguridad descargada');
+      };
+
+      const handleImportJson = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const parsed = JSON.parse(event.target.result);
+            if (parsed.watches && Array.isArray(parsed.watches) && parsed.measurements) {
+              setWatches(parsed.watches);
+              setRawMeasurements(parsed.measurements);
+              if (parsed.watches.length > 0) setSelectedWatchId(parsed.watches[0].id);
+              showToast('Subiendo archivo a Supabase...');
+              try {
+                await supabaseApi.upsertWatchesBatch(parsed.watches);
+                await supabaseApi.upsertMeasurementsBatch(parsed.measurements);
+                setSyncStatus('synced');
+                setLastSyncTime(new Date());
+                showToast('¡Datos importados y guardados en Supabase!');
+              } catch (cloudErr) {
+                console.error(cloudErr);
+                showToast('Datos importados localmente (Error en nube)');
+              }
+            } else {
+              showToast('El archivo no tiene el formato de Horology Sheets');
+            }
+          } catch (err) {
+            showToast('Error al procesar el archivo JSON');
+          }
+        };
+        reader.readAsText(file);
+      };
+
+      return (
+        <div className="min-h-screen flex flex-col selection:bg-emerald-500 selection:text-white">
+          {/* Header */}
+          <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-2xs">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white shadow-xs">
+                  <Watch className="w-5 h-5" />
+                </div>
+                <div>
+                  <h1 className="font-black text-slate-900 text-base sm:text-lg tracking-tight flex items-center gap-2">
+                    <span>HOROLOGY SHEETS</span>
+                    <span className="text-[10px] bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded-full border border-slate-200">
+                      HTML Autónomo
+                    </span>
+                  </h1>
+                  <p className="text-[11px] text-slate-500 hidden sm:block">Control de Precisión y Desviación de Relojes Mecánicos</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Supabase Cloud Status pill button */}
+                <button
+                  type="button"
+                  onClick={() => setIsSupabaseModalOpen(true)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                    syncStatus === 'synced'
+                      ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+                      : syncStatus === 'syncing'
+                      ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200'
+                      : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-200'
+                  }`}
+                  title="Estado de conexión en tiempo real con Supabase (Haz clic para más opciones)"
+                >
+                  <Cloud className={`w-3.5 h-3.5 ${syncStatus === 'syncing' ? 'animate-pulse' : ''}`} />
+                  <span className="hidden sm:inline">
+                    {syncStatus === 'synced' && 'Supabase Conectado'}
+                    {syncStatus === 'syncing' && 'Sincronizando...'}
+                    {syncStatus === 'error' && 'Error Nube'}
+                  </span>
+                  <span className={`w-1.5 h-1.5 rounded-full ${
+                    syncStatus === 'synced' ? 'bg-emerald-500 shadow-xs' : syncStatus === 'syncing' ? 'bg-amber-500 animate-ping' : 'bg-rose-500'
+                  }`} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => syncWithSupabase(false, true)}
+                  disabled={syncStatus === 'syncing'}
+                  className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                  title="Sincronizar ahora con Supabase"
+                >
+                  <RefreshCw className={`w-4 h-4 ${syncStatus === 'syncing' ? 'animate-spin text-emerald-600' : ''}`} />
+                </button>
+
+                <input type="file" id="import-json-input" accept=".json" onChange={handleImportJson} className="hidden" />
+                <button
+                  type="button"
+                  onClick={() => document.getElementById('import-json-input').click()}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors"
+                  title="Restaurar copia de seguridad en JSON"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span className="hidden md:inline">Importar</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportJson}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors"
+                  title="Descargar copia de seguridad en JSON"
+                >
+                  <Download className="w-4 h-4" />
+                  <span className="hidden md:inline">Descargar</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleClearAllData}
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  title="Limpiar datos y empezar de cero"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleRestoreDemoData}
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                  title="Cargar reloj y mediciones de prueba"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingMeasurement(null);
+                    setModalDefaultIsReset(false);
+                    setIsMeasurementModalOpen(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-sm transition-all active:scale-95 ml-1"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Nueva Medición</span>
+                </button>
+              </div>
+            </div>
+          </header>
+
+          {/* Main Body */}
+          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex-1 w-full space-y-5">
+            {/* 1. Live Watch Time Comparator */}
+            <WatchTimeComparator
+              currentWatch={currentWatch}
+              lastMeasurement={lastMeasurement}
+              onSaveMeasurement={handleDirectSaveMeasurement}
+              onOpenNewWatchModal={() => { setEditingWatch(null); setIsWatchModalOpen(true); }}
+            />
+
+            {/* 2. Watch Selector */}
+            <WatchSelector
+              watches={watches}
+              selectedWatchId={selectedWatchId}
+              onSelectWatch={setSelectedWatchId}
+              onAddWatch={() => { setEditingWatch(null); setIsWatchModalOpen(true); }}
+              onEditWatch={(w) => { setEditingWatch(w); setIsWatchModalOpen(true); }}
+              activeSessionDrift={activeSessionDrift}
+              activeSessionRate={activeSessionRate}
+            />
+
+            {/* 3. Navigation Tabs */}
+            <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+              <button
+                onClick={() => setActiveTab('SHEETS')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'SHEETS' ? 'bg-slate-900 text-white shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200/80'
+                }`}
+              >
+                <Table className="w-4 h-4" />
+                <span>Hoja de Cálculo</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('POSITIONS')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'POSITIONS' ? 'bg-slate-900 text-white shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200/80'
+                }`}
+              >
+                <Compass className="w-4 h-4" />
+                <span>Análisis por Posiciones</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('CHARTS')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  activeTab === 'CHARTS' ? 'bg-slate-900 text-white shadow-xs' : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200/80'
+                }`}
+              >
+                <LineChart className="w-4 h-4" />
+                <span>Gráficas Temporales</span>
+              </button>
+            </div>
+
+            {/* 4. Tab Views */}
+            {activeTab === 'SHEETS' && (
+              <SheetGrid
+                watchName={currentWatch ? currentWatch.name : 'Reloj'}
+                measurements={calculatedMeasurements}
+                onAddMeasurement={() => { setEditingMeasurement(null); setIsMeasurementModalOpen(true); }}
+                onEditMeasurement={(m) => { setEditingMeasurement(m); setIsMeasurementModalOpen(true); }}
+                onDeleteMeasurement={handleDeleteMeasurement}
+                onStartNewSession={() => { setEditingMeasurement(null); setModalDefaultIsReset(true); setIsMeasurementModalOpen(true); }}
+              />
+            )}
+
+            {activeTab === 'POSITIONS' && (
+              <PositionAnalysis watch={currentWatch} measurements={calculatedMeasurements} />
+            )}
+
+            {activeTab === 'CHARTS' && (
+              <PerformanceCharts watch={currentWatch} measurements={calculatedMeasurements} />
+            )}
+          </main>
+
+          {/* Footer */}
+          <footer className="bg-white border-t border-slate-200 mt-12 py-6 text-center text-xs text-slate-500">
+            <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-1.5 text-slate-600 font-medium">
+                <Cloud className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Horology Sheets — HTML Autónomo con Sincronización en Nube Supabase</span>
+              </div>
+              <div className="text-slate-400 text-[11px] flex items-center gap-2">
+                <span>Base de datos PostgreSQL en tiempo real</span>
+                <span>•</span>
+                <span>Compatible con Netlify, Vercel o uso local</span>
+              </div>
+            </div>
+          </footer>
+
+          {/* Modals */}
+          <SupabaseModal
+            isOpen={isSupabaseModalOpen}
+            onClose={() => setIsSupabaseModalOpen(false)}
+            syncStatus={syncStatus}
+            lastSyncTime={lastSyncTime}
+            syncError={syncError}
+            onSync={() => syncWithSupabase(false, true)}
+            onPushLocal={pushToSupabase}
+            onPullRemote={pullFromSupabase}
+            watchesCount={watches.length}
+            measurementsCount={rawMeasurements.length}
+          />
+
+          <AddMeasurementModal
+            isOpen={isMeasurementModalOpen}
+            onClose={() => setIsMeasurementModalOpen(false)}
+            onSave={handleSaveMeasurement}
+            watchId={currentWatch ? currentWatch.id : ''}
+            initialData={editingMeasurement}
+            defaultIsReset={modalDefaultIsReset}
+          />
+
+          <WatchModal
+            isOpen={isWatchModalOpen}
+            onClose={() => setIsWatchModalOpen(false)}
+            onSave={handleSaveWatch}
+            onDelete={handleDeleteWatch}
+            initialWatch={editingWatch}
+            canDelete={watches.length > 1}
+          />
+
+          <ConfirmModal
+            isOpen={confirmDialog.isOpen}
+            title={confirmDialog.title}
+            message={confirmDialog.message}
+            confirmLabel={confirmDialog.confirmLabel}
+            variant={confirmDialog.variant}
+            onConfirm={confirmDialog.onConfirm}
+            onCancel={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+          />
+
+          {/* Floating Toast */}
+          {toastMessage && (
+            <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 border border-slate-700">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+              <span>{toastMessage}</span>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Render Root
+    const rootElement = document.getElementById('root');
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(<App />);
+  </script>
+</body>
+</html>
