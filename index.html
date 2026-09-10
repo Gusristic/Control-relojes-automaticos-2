@@ -114,6 +114,7 @@
 
     // Positions metadata
     const POSITION_NAMES = {
+      WRIST: 'Reloj Puesto (En Muñeca)',
       CH: 'Esfera Arriba (Dial Up)',
       CD: 'Esfera Abajo (Dial Down)',
       '9H': 'Corona a las 9 (Crown Left)',
@@ -124,6 +125,7 @@
     };
 
     const POSITION_DESCRIPTIONS = {
+      WRIST: 'Llevado en la muñeca en uso cotidiano real, sujeto a movimiento natural y temperatura corporal.',
       CH: 'Posición horizontal apoyado sobre el fondo de la caja.',
       CD: 'Posición horizontal apoyado sobre el cristal/bisel.',
       '9H': 'Posición vertical típica al llevar el reloj en la muñeca izquierda con el brazo hacia abajo.',
@@ -134,7 +136,7 @@
     };
 
     // Color options
-    const COLOR_OPTIONS = ['#0f172a', '#1e3a8a', '#14532d', '#701a75', '#7c2d12', '#047857', '#b91c1c'];
+    const COLOR_OPTIONS = ['#0f172a', '#1e3a8a', '#14532d', '#f97316', '#701a75', '#7c2d12', '#047857', '#b91c1c'];
 
     // Initial clean data
     const INITIAL_WATCHES = [
@@ -194,9 +196,9 @@
           watchId: 'watch-demo-seiko',
           realTime: new Date(now - 24 * h).toISOString(),
           watchTime: new Date(now - 24 * h + 9500).toISOString(),
-          position: '9H',
+          position: 'WRIST',
           isReset: false,
-          notes: 'Uso diario normal en muñeca izquierda (+5.5s en 24h).'
+          notes: 'Uso diario con el reloj puesto en la muñeca (+5.5s en 24h).'
         },
         {
           id: 'm-demo-4',
@@ -1183,10 +1185,12 @@
       const positionsWithData = Object.entries(positionStats).filter(([_, s]) => s.count > 0);
 
       const bestPositionToCompensate = useMemo(() => {
-        if (positionsWithData.length === 0) return null;
+        // Para la autocompensación nocturna en mesita, evaluamos posiciones de reposo estáticas
+        const restingPositions = positionsWithData.filter(([pos]) => pos !== 'WRIST');
+        if (restingPositions.length === 0) return null;
         let slowest = null;
         let fastest = null;
-        positionsWithData.forEach(([pos, s]) => {
+        restingPositions.forEach(([pos, s]) => {
           const avg = s.sum / s.count;
           if (!slowest || avg < slowest.avg) slowest = { pos, avg };
           if (!fastest || avg > fastest.avg) fastest = { pos, avg };
@@ -1199,7 +1203,7 @@
           <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs">
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
               <Compass className="w-4 h-4 text-emerald-600" />
-              <span>Análisis de Precisión por Posiciones (6 Posiciones + Cargador)</span>
+              <span>Análisis de Precisión por Posiciones (Reloj Puesto + Posiciones Estáticas + Cargador)</span>
             </h3>
             <p className="text-xs text-slate-500 leading-relaxed mb-4">
               Los relojes mecánicos varían su marcha según la orientación respecto a la gravedad debido al efecto sobre el volante y la espiral. Conociendo qué posición adelanta o atrasa, puedes dejar el reloj en la mesita por la noche para autocompensar la desviación diaria.

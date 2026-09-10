@@ -14,6 +14,7 @@ interface WatchModalProps {
 const COLOR_OPTIONS = [
   '#0284c7', // Sky blue
   '#10b981', // Emerald green
+  '#f97316', // Orange
   '#f59e0b', // Amber
   '#8b5cf6', // Violet
   '#ec4899', // Pink
